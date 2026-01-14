@@ -7,6 +7,7 @@ uv run pytest -k test_mask_phones
 uv run pytest -k test_mask_ips
 uv run pytest -k test_classify_nsfw
 uv run pytest -k test_classify_toxic_speech
+uv run pytest -k test_gopher
 """
 
 """
@@ -55,7 +56,7 @@ type of page: text/plain
 miscellaneous: 
 """
 
-from typing import Any
+from typing import Any, List
 import re
 
 from fastwarc.stream_io import FileStream, GZipStream
@@ -253,6 +254,48 @@ def classify_toxic_speech(text: str) -> tuple[Any, float]:
     return (lang, confidence)
 
 
+"""
+gopher_quality_filters
+(b)
+harmful information might be classified as high quality
+repeat the same thing multiple times is classifed as hgih quality
+"""
+
+
+def has_alpha(word: str) -> bool:
+    """Check if a word contains at least one alphabetic character."""
+    return any(c.isalpha() for c in word)
+
+
+def gopher_quality_filter(text: str) -> bool:
+    """
+    Returns True if the document passes all filters,
+    False if it should be removed.
+    """
+
+    words = re.findall(r"\b\w+\b", text)
+    num_words = len(words)
+
+    if num_words < 50 or num_words > 100_000:
+        return False
+
+    mean_word_length = sum(len(w) for w in words) / num_words
+    if mean_word_length < 3 or mean_word_length > 10:
+        return False
+
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if lines:
+        ellipsis_lines = sum(line.endswith("...") for line in lines)
+        if ellipsis_lines / len(lines) > 0.30:
+            return False
+
+    alpha_words = sum(has_alpha(w) for w in words)
+    if alpha_words / num_words < 0.80:
+        return False
+
+    return True
+
+
 def extract_warc(file_name: str) -> None:
     stream = GZipStream(FileStream(file_name, 'rb'))
     cnt = 20
@@ -263,12 +306,12 @@ def extract_warc(file_name: str) -> None:
             text = extract_text(payload_bytes)
             if text is None:
                 continue
-            text = " ".join(text.split())
-            _, confidence1 = classify_NSFW(text)
-            _, confidence2 = classify_toxic_speech(text)
-            print(text, confidence1, confidence2)
+            print(gopher_quality_filter(text), ' '.join(text.split()))
+            # _, confidence1 = classify_NSFW(text)
+            # _, confidence2 = classify_toxic_speech(text)
+            # print(text, confidence1, confidence2)
             cur += 1
             if cur == cnt:
                 break
 
-extract_warc('/Users/YangWen/Documents/Code/github/data/data/CC/CC-MAIN-20250417135010-20250417165010-00065.warc.gz')
+# extract_warc('/Users/YangWen/Documents/Code/github/data/data/CC/CC-MAIN-20250417135010-20250417165010-00065.warc.gz')
