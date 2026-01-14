@@ -45,6 +45,7 @@ miscellaneous:
 """
 
 from typing import Any
+import re
 
 from fastwarc.stream_io import FileStream, GZipStream
 from fastwarc.warc import ArchiveIterator, WarcRecordType
@@ -54,9 +55,13 @@ import fasttext
 
 
 def extract_text(html_bytes: bytes) -> str | None:
-    encoding = detect_encoding(html_bytes)
-    bytes_str = html_bytes.decode(encoding)
-    return extract_plain_text(bytes_str)
+    try:
+        encoding = detect_encoding(html_bytes)
+        bytes_str = html_bytes.decode(encoding or "utf-8", errors="replace")
+        text = extract_plain_text(bytes_str)
+        return text if text else None
+    except Exception:
+        return None
 
 
 """
@@ -124,6 +129,80 @@ def get_language(text: str) -> tuple[Any, float]:
     return (lang, confidence)
 
 
+"""
+mask_pii
+4
+replacing diverse forms into a single placeholder token collapses many distinct contexts into one
+use typed but diverse placeholders, randomize placeholders slightly
+
+long placeholder strings introduce unnatrual token patterns and sequence lengths
+replace with short consistent tokens, add them explicitly to the tokenizer vocabulary
+
+5
+false positive
+population 2001219099
+this is replaced by |||PHONE_NUMBER|||
+
+false negative
+email tom@white
+"""
+
+
+EMAIL_PATTERN = re.compile(
+    r"""
+    (?<![\w.-])                # left boundary
+    [a-zA-Z0-9._%+-]+           # username
+    @
+    [a-zA-Z0-9.-]+              # domain
+    \.[a-zA-Z]{2,}              # TLD
+    (?![\w.-])                  # right boundary
+    """,
+    re.VERBOSE
+)
+
+def mask_email(text: str) -> tuple[str, int]:
+    return EMAIL_PATTERN.subn("|||EMAIL_ADDRESS|||", text)
+
+
+PHONE_PATTERN = re.compile(
+    r"""
+    (?<!\d)                          # no digit before
+    (?:\+?1[\s.-]?)?                 # optional country code
+    (?:                              # area code
+        \(?\d{3}\)?                  # (123) or 123
+        [\s.-]?
+    )
+    \d{3}                            # exchange
+    [\s.-]?
+    \d{4}                            # line number
+    (?!\d)                           # no digit after
+    """,
+    re.VERBOSE
+)
+
+
+def mask_phone_numbers(text: str) -> tuple[str, int]:
+    return PHONE_PATTERN.subn("|||PHONE_NUMBER|||", text)
+
+
+IPV4_PATTERN = re.compile(
+    r"""
+    (?<!\d)                                   # no digit before
+    (?:                                      # first three octets
+        (?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)   # 0–255
+        \.
+    ){3}
+    (?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)       # last octet
+    (?!\d)                                   # no digit after
+    """,
+    re.VERBOSE
+)
+
+
+def mask_ips(text: str) -> tuple[str, int]:
+    return IPV4_PATTERN.subn("|||IP_ADDRESS|||", text)
+
+
 def extract_warc(file_name: str) -> None:
     stream = GZipStream(FileStream(file_name, 'rb'))
     cnt = 20
@@ -132,10 +211,21 @@ def extract_warc(file_name: str) -> None:
         if record.record_type == WarcRecordType.response:
             payload_bytes = record.reader.read()
             text = extract_text(payload_bytes)
-            print(get_language(text))
-            cur += 1
-            if cur == cnt:
-                break
-
+            if text is None:
+                continue
+            text = " ".join(text.split())
+            old = text
+            tmp = 0
+            text, tot = mask_email(text)
+            tmp += tot
+            text, tot = mask_phone_numbers(text)
+            tmp += tot
+            text, tot = mask_ips(text)
+            tmp += tot
+            if tmp > 0:
+                print(old, text)
+                cur += 1
+                if cur == cnt:
+                    break
 
 # extract_warc('/Users/YangWen/Documents/Code/github/data/data/CC/CC-MAIN-20250417135010-20250417165010-00065.warc.gz')
