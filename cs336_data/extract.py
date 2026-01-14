@@ -1,4 +1,15 @@
 """
+command
+uv run pytest -k test_extract_text_from_html_bytes
+uv run pytest -k test_identify_language
+uv run pytest -k test_mask_emails
+uv run pytest -k test_mask_phones
+uv run pytest -k test_mask_ips
+uv run pytest -k test_classify_nsfw
+uv run pytest -k test_classify_toxic_speech
+"""
+
+"""
 look at common crawl
 
 (a)
@@ -203,6 +214,45 @@ def mask_ips(text: str) -> tuple[str, int]:
     return IPV4_PATTERN.subn("|||IP_ADDRESS|||", text)
 
 
+"""
+harmful_content
+3.
+over sanitization
+aggressive filtering removes a large fraction of content, including borderline or contextually safe text
+
+model can fial to respond to sensitive topcis
+
+loss of realistic context
+model may underestimate social context cues
+
+mitigation strategies
+use probabilistic / soft filtering
+partial masking instead of removal
+
+4.
+fraction is about 30%
+classifier error
+false positive, a website about Apache, it is classified as NSFW and toxic speed
+threshold should be 0.9
+"""
+
+def classify_NSFW(text: str) -> tuple[Any, float]:
+    text = " ".join(text.split())
+    model = fasttext.load_model("/Users/YangWen/Documents/Code/github/data/data/classifier/jigsaw_fasttext_bigrams_nsfw_final.bin")
+    labels, probabilities = model.predict(text)
+    lang = labels[0].replace("__label__", "")
+    confidence = probabilities[0]
+    return (lang, confidence)
+
+def classify_toxic_speech(text: str) -> tuple[Any, float]:
+    text = " ".join(text.split())
+    model = fasttext.load_model("/Users/YangWen/Documents/Code/github/data/data/classifier/jigsaw_fasttext_bigrams_hatespeech_final.bin")
+    labels, probabilities = model.predict(text)
+    lang = labels[0].replace("__label__", "")
+    confidence = probabilities[0]
+    return (lang, confidence)
+
+
 def extract_warc(file_name: str) -> None:
     stream = GZipStream(FileStream(file_name, 'rb'))
     cnt = 20
@@ -214,18 +264,11 @@ def extract_warc(file_name: str) -> None:
             if text is None:
                 continue
             text = " ".join(text.split())
-            old = text
-            tmp = 0
-            text, tot = mask_email(text)
-            tmp += tot
-            text, tot = mask_phone_numbers(text)
-            tmp += tot
-            text, tot = mask_ips(text)
-            tmp += tot
-            if tmp > 0:
-                print(old, text)
-                cur += 1
-                if cur == cnt:
-                    break
+            _, confidence1 = classify_NSFW(text)
+            _, confidence2 = classify_toxic_speech(text)
+            print(text, confidence1, confidence2)
+            cur += 1
+            if cur == cnt:
+                break
 
-# extract_warc('/Users/YangWen/Documents/Code/github/data/data/CC/CC-MAIN-20250417135010-20250417165010-00065.warc.gz')
+extract_warc('/Users/YangWen/Documents/Code/github/data/data/CC/CC-MAIN-20250417135010-20250417165010-00065.warc.gz')
