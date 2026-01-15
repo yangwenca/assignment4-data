@@ -3,8 +3,10 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from cs336_data.dedup import exact_dedup, fuzzy_deduplicate
 from cs336_data.extract import classify_NSFW, classify_toxic_speech, gopher_quality_filter
 from cs336_data.extract import extract_text, get_language, mask_email, mask_ips, mask_phone_numbers
+from cs336_data.training import predict_quality
 
 
 def run_extract_text_from_html_bytes(html_bytes: bytes) -> str | None:
@@ -36,7 +38,7 @@ def run_classify_toxic_speech(text: str) -> tuple[Any, float]:
 
 
 def run_classify_quality(text: str) -> tuple[Any, float]:
-    raise NotImplementedError
+    return predict_quality(text)
 
 
 def run_gopher_quality_filter(text: str) -> bool:
@@ -46,7 +48,7 @@ def run_gopher_quality_filter(text: str) -> bool:
 def run_exact_line_deduplication(
     input_files: list[os.PathLike], output_directory: os.PathLike
 ):
-    raise NotImplementedError
+    return exact_dedup(input_files, output_directory)
 
 
 def run_minhash_deduplication(
@@ -57,4 +59,11 @@ def run_minhash_deduplication(
     jaccard_threshold: float,
     output_directory: os.PathLike,
 ):
-    raise NotImplementedError
+    return fuzzy_deduplicate(
+        input_paths=input_files,
+        num_hashes=num_hashes,
+        num_bands=num_bands,
+        ngram_size=ngrams,
+        jaccard_threshold=jaccard_threshold,
+        output_dir=output_directory,
+    )

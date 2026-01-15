@@ -56,7 +56,7 @@ type of page: text/plain
 miscellaneous: 
 """
 
-from typing import Any, List
+from typing import Any
 import re
 
 from fastwarc.stream_io import FileStream, GZipStream
