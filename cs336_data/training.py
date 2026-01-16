@@ -1,8 +1,7 @@
 """
-Docstring for cs336_data.training
 Train a fastText quality classifier
-positive: Wiki pages as positive examples
-negative: random pages from Common Crawl
+wiki: Wiki pages as positive examples
+cc: random pages from Common Crawl
 """
 from typing import Any
 import gzip
@@ -51,8 +50,9 @@ def get_text_from_wet(wet_path: str, num_samples: int) -> list[str]:
                 if in_content and current_txt:
                     content = '\n'.join(current_txt).strip()
                     content = re.sub(r'\s+', ' ', content)
-                    _, prob = get_language(content)
-                    if prob > probability:
+                    content = ' '.join(content.split()[:1000])
+                    lang, prob = get_language(content)
+                    if lang == 'en' and prob > probability:
                         texts.append(content)
                 current_txt = []
                 in_content = False
@@ -73,14 +73,17 @@ def get_text_from_warc(warc_path: str, num_samples: int) -> list[str]:
             if text is None:
                 continue
             text = re.sub(r'\s+', ' ', text.strip())
-            # lang, prob = get_language(text)
-            # if lang != 'en' or prob < probability:
-            #     continue
-            # filter out based on percentage of alpha words
-            length = len(text)
-            if length < 50:
+            lang, prob = get_language(text)
+            if prob < probability:
                 continue
-            alpha_words = sum(has_alpha(word) for word in text)
+            if lang != "en":
+                continue
+            # filter out based on percentage of alpha words
+            text_tmp = text.split()
+            length = len(text_tmp)
+            if length < 500:
+                continue
+            alpha_words = sum(has_alpha(word) for word in text_tmp)
             if alpha_words / length > 0.6:
                 ans.append(text)
             if len(ans) >= num_samples:
@@ -174,7 +177,6 @@ def predict_quality(text: str) -> tuple[Any, float]:
     labels, probabilities = model.predict(text)
     label = labels[0].replace("__label__", "")
     confidence = probabilities[0]
-    print(label, confidence)
     return (label, confidence)
 
 
@@ -184,11 +186,11 @@ def main():
         wet_path='/Users/YangWen/Documents/Code/github/data/data/CC/CC-MAIN-20250417135010-20250417165010-00065.warc.wet.gz',
         wiki_path='/Users/YangWen/Documents/Code/github/data/data/CC/enwiki-20240420-extracted_urls.txt.gz',
         output_path=training_path,
-        num_samples=2000,
+        num_samples=50,
     )
 
-    # model_path = '/Users/YangWen/Documents/Code/github/data/data/CC/classifier_own.bin'
-    # training_model(training_file=training_path, model_file=model_path)
+    model_path = '/Users/YangWen/Documents/Code/github/data/data/CC/classifier_own.bin'
+    training_model(training_file=training_path, model_file=model_path)
 
 
 if __name__ == "__main__":
