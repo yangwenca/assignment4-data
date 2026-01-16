@@ -11,9 +11,9 @@ from transformers import AutoTokenizer
 """
 filter_data
 (b)
-700 seconds per WET files, 12 cpu in parallel
-5000 WET files take 291660 seconds, 81 hours
-100,000 WET files take 1620 hours
+500 seconds per WET files, 12 cpu in parallel
+5000 WET files take 208333 seconds, 58 hours
+100,000 WET files take 1160 hours
 
 inspect filtered data
 (a)
@@ -27,8 +27,8 @@ languages are not english, some are too short or too long
 need to add deduplicateds in the model
 
 tokenize_data
-1 wet file 100k tokens
-5000 WET, should give 500M tokens in total
+1 wet file 30k tokens
+5000 WET, should give 150M tokens in total
 """
 
 
